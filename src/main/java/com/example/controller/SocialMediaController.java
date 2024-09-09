@@ -1,19 +1,15 @@
 package com.example.controller;
 
-import java.util.List;
-import java.util.Map;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.example.entity.Account;
-import com.example.entity.Message;
-import com.example.exception.ResourceNotFoundException;
-import com.example.exception.UsernameAlreadyExistsException;
-import com.example.service.AccountService;
-import com.example.service.MessageService;
+import java.util.List;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+
+import com.example.entity.*;
+import com.example.exception.UserExistedException;
+import com.example.service.*;;
 /**
  * TODO: You will need to write your own endpoints and handlers for your controller using Spring. The endpoints you will need can be
  * found in readme.md as well as the test cases. You be required to use the @GET/POST/PUT/DELETE/etc Mapping annotations
@@ -22,88 +18,83 @@ import com.example.service.MessageService;
  */
 @RestController
 public class SocialMediaController {
-    private AccountService accountService;
-    private MessageService messageService;
+    AccountService accountService;
+    MessageService messageService;
 
-    public SocialMediaController(AccountService accountService, MessageService messageService){
+    @Autowired
+    public SocialMediaController(AccountService accountService, MessageService messageService) {
         this.accountService = accountService;
         this.messageService = messageService;
     }
-    @PostMapping("register")
-    public ResponseEntity<String> register(@RequestBody Account newAccount) {
+
+    @PostMapping("/register")
+    public ResponseEntity<Account> register(@RequestBody Account account){
         try {
-            accountService.register(newAccount) ;
-            return ResponseEntity.status(HttpStatus.OK)
-                    .body("Successfully registered");
-        } catch (UsernameAlreadyExistsException e) {
-            if (e.getMessage().equals("Username already exists")) {
-                return ResponseEntity.status(HttpStatus.CONFLICT).build();
-            } else {
-                return ResponseEntity.badRequest().build();
-            }
+            Account registeredAccount = this.accountService.register(account);
+            return ResponseEntity.status(200).body(registeredAccount);
+        } catch (UserExistedException e) {
+            System.out.println(e.getMessage());
+            return ResponseEntity.status(409).build();
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
         }
         
+        return ResponseEntity.status(400).build();
     }
+
     @PostMapping("/login")
-    public ResponseEntity<Account> login(@RequestBody Account loginRequest) {
-        try {
-            Account authenticatedAccount = accountService.login(loginRequest.getUsername(), loginRequest.getPassword());
-            return ResponseEntity.ok(authenticatedAccount);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    public ResponseEntity<Account> login(@RequestBody Account account){
+        Account foundAccount = this.accountService.login(account);
+        if (foundAccount == null) {
+            return ResponseEntity.status(401).build();
+
         }
+        return ResponseEntity.status(200).body(foundAccount);
+    }
+
+    @PostMapping("/messages")
+    public ResponseEntity<Message> createMessages(@RequestBody Message message){
+        Message addedMessage = this.messageService.createMessages(message);
+        if (addedMessage == null) {
+            return ResponseEntity.status(400).build();
+
+        }
+        return ResponseEntity.status(200).body(addedMessage);
+    }
+
+    @GetMapping("/messages")
+    public ResponseEntity<List<Message>> getAllMessages(){
+        List<Message> allMessages = this.messageService.getAllMessages();
+        return ResponseEntity.status(200).body(allMessages);
+    }
+
+    @GetMapping("/messages/{message_id}")
+    public ResponseEntity<Message> getMessageById(@PathVariable int message_id){
+        Message foundMessage = this.messageService.getMessageById(message_id);
+        return ResponseEntity.status(200).body(foundMessage);
     }
     
-    @PostMapping("messages")
-    public @ResponseBody ResponseEntity<Message> createPie(@RequestBody Message newMessage){
-        try {
-            messageService.addNewMessage(newMessage);
-                return ResponseEntity.status(HttpStatus.OK)
-                            .body(newMessage);
-        } catch (IllegalArgumentException | ResourceNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build(); 
+    @DeleteMapping("/messages/{message_id}")
+    public ResponseEntity<Integer> deleteMessageById(@PathVariable int message_id){
+        int rowsAffected = this.messageService.deleteMessageById(message_id);
+        if (rowsAffected == 0) {
+            return ResponseEntity.status(200).build();
         }
-    }
-    @GetMapping("messages")
-    public @ResponseBody ResponseEntity<List<Message>> getMessageList(){
-        return new ResponseEntity<>(messageService.getMessageList(), HttpStatus.OK);
-    }  
-
-    @GetMapping("messages/{messageId}")
-    public @ResponseBody ResponseEntity<Message> getMessageById(@PathVariable Integer messageId){
-        try {
-            return new ResponseEntity<>(messageService.getMessageById(messageId), HttpStatus.OK);
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.OK).build();
-        }
-    }
-    @DeleteMapping("messages/{messageId}")
-    public @ResponseBody ResponseEntity<String> deleteMessageById(@PathVariable Integer messageId) {
-        boolean isDeleted = messageService.deleteMessageById(messageId);
-        if (isDeleted) {
-            return ResponseEntity.status(HttpStatus.OK).body("1"); // Message existed and was deleted
-        } else {
-            return ResponseEntity.status(HttpStatus.OK).body(""); // Message did not exist, return empty body
-        }
+        return ResponseEntity.status(200).body(rowsAffected);
     }
 
-    @PatchMapping("messages/{messageId}")
-    public @ResponseBody ResponseEntity<String> patchMessageById(@PathVariable Integer messageId, 
-                                                                 @RequestBody Map<String, String> updates){
-        try {
-            String newText = updates.get("messageText");
-            messageService.updateMessageById(messageId, newText);
-            return ResponseEntity.status(HttpStatus.OK).body("1");
-        }catch (ResourceNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+    @PatchMapping("/messages/{message_id}")
+    public ResponseEntity<Integer> updateMessageById(@PathVariable int message_id, @RequestBody Message message){
+        int rowsAffected = this.messageService.updateMessageById(message_id, message);
+        if (rowsAffected == 0) {
+            return ResponseEntity.status(400).build();
         }
+        return ResponseEntity.status(200).body(rowsAffected);
     }
- 
-    @GetMapping("accounts/{accountId}/messages")
-    public @ResponseBody ResponseEntity<List<Message>> getAllMessagesByUserId(@PathVariable Integer accountId){
-        return new ResponseEntity<>(messageService.getAllMessagesByUserId(accountId), HttpStatus.OK);
-    }  
 
+    @GetMapping("/accounts/{account_id}/messages")
+    public ResponseEntity<List<Message>> getAllMessagesFromUser(@PathVariable int account_id){
+        List<Message> allMessages = this.messageService.getAllMessagesFromUser(account_id);
+        return ResponseEntity.status(200).body(allMessages);
+    }
 }

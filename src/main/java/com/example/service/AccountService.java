@@ -3,40 +3,37 @@ package com.example.service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.example.entity.Account;
-import com.example.exception.UsernameAlreadyExistsException;
 import com.example.repository.AccountRepository;
+import com.example.entity.Account;
+import com.example.exception.UserExistedException;
 
 @Service
 public class AccountService {
-    private AccountRepository accountRepository;
+    AccountRepository accountRepository;
 
     @Autowired
-    public AccountService(AccountRepository accountRepository){
+    public AccountService(AccountRepository accountRepository) {
         this.accountRepository = accountRepository;
     }
+    
+    public Account register(Account account) throws Exception, UserExistedException {
+        if (account.getUsername().length() == 0) {
+            throw new Exception("Username cannot be blank!");
+        }
+        if (account.getPassword().length() < 4) {
+            throw new Exception("Password too short!");
+        }
 
-    public Account findAccountByUsername(String username) throws UsernameAlreadyExistsException {
-        return accountRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameAlreadyExistsException("Account with username " + username + " was not found."));
+        Account exist = this.accountRepository.findByUsername(account.getUsername());
+
+        if (exist != null) {
+            throw new UserExistedException("Username already exists!");
+        }
+        
+        return this.accountRepository.save(account);
     }
     
-    public Account register(Account newAccount) throws IllegalArgumentException {
-        if (newAccount.getUsername() == null || newAccount.getUsername().isBlank()) {
-            throw new IllegalArgumentException("Username cannot be blank");
-        }
-        if (newAccount.getPassword() == null || newAccount.getPassword().length() < 4) {
-            throw new IllegalArgumentException("Password must be at least 4 characters long");
-        }
-        if (accountRepository.findByUsername(newAccount.getUsername()).isPresent()) {
-            throw new UsernameAlreadyExistsException("Username already exists");
-        }
-        return accountRepository.save(newAccount);
+    public Account login(Account account){
+        return this.accountRepository.findByUsernameAndPassword(account.getUsername(), account.getPassword());
     }
-
-    public Account login(String username, String password) {
-        return accountRepository.findByUsernameAndPassword(username, password)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
-    }
-        
 }
